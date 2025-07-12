@@ -1,26 +1,25 @@
 FROM oven/bun:latest AS builder
 
 WORKDIR /build
-COPY web/package.json .
-RUN bun install
+COPY VERSION .
 COPY ./web .
-COPY ./VERSION .
+RUN bun install
 RUN DISABLE_ESLINT_PLUGIN='true' VITE_REACT_APP_VERSION=$(cat VERSION) bun run build
 
 FROM golang:alpine AS builder2
+
+RUN apk upgrade --no-cache \
+    && apk add --no-cache git
 
 ENV GO111MODULE=on \
     CGO_ENABLED=0 \
     GOOS=linux
 
 WORKDIR /build
-
-ADD go.mod go.sum ./
-RUN go mod download
-
 COPY . .
+RUN go mod tidy
 COPY --from=builder /build/dist ./web/dist
-RUN go build -ldflags "-s -w -X 'one-api/common.Version=$(cat VERSION)'" -o one-api
+RUN go build -ldflags "-s -w -X 'one-api/common.Version=$(cat VERSION)' -extldflags '-static'" -o one-api
 
 FROM alpine
 
